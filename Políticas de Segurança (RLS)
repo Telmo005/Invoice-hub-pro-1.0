@@ -1,0 +1,12 @@
+-- Políticas para a tabela invoices
+CREATE POLICY "Users can view their own invoices" 
+ON invoices FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own invoices" 
+ON invoices FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own invoices" 
+ON invoices FOR UPDATE USING (auth.uid() = user_id);
+
+-- Políticas para as demais tabelas seguem o mesmo padrão
+-- (issuers, recipients, invoice_items, item_taxes, etc.)
