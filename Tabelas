@@ -18,6 +18,18 @@ CREATE TABLE invoices (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE payments (
+  id SERIAL PRIMARY KEY,
+  payment_id VARCHAR(50) NOT NULL UNIQUE,
+  method VARCHAR(20) NOT NULL,
+  phone_number VARCHAR(20) NOT NULL,
+  amount NUMERIC(10, 2) NOT NULL,
+  status VARCHAR(20) NOT NULL,
+  invoice_data JSONB NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  invoice_id UUID REFERENCES invoices(id)
+);
+
 -- Tabela de emissores (pode ser reutilizada para várias faturas do mesmo emissor)
 CREATE TABLE issuers (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
