@@ -437,3 +437,11 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 COMMENT ON FUNCTION criar_fatura_completa IS 'Função para criar uma fatura completa com todos os relacionamentos em uma única transação';
+
+ALTER TABLE emissores 
+DROP CONSTRAINT IF EXISTS documento_valido;
+
+-- Nova constraint que aceita qualquer texto (mas não vazio)
+ALTER TABLE emissores
+ADD CONSTRAINT documento_valido 
+CHECK (documento ~ '^.+$');  -- Aceita qualquer string com pelo menos 1 caractere
