@@ -1,19 +1,22 @@
 -- =============================================
--- Configuração Inicial
+-- Configuração Inicial do Banco de Dados
 -- =============================================
--- Habilita extensões necessárias
+
+-- Extensões necessárias
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- =============================================
--- Tabela de Emissores (Empresas/Usuários que emitem faturas)
+-- Seção 1: Definição das Tabelas Principais
 -- =============================================
+
+-- Tabela de Emissores (Empresas/Usuários que emitem faturas)
 CREATE TABLE emissores (
     -- Identificação
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     
-    -- Dados da empresa (conforme interface)
+    -- Dados da empresa
     nome_empresa TEXT NOT NULL,
     documento TEXT NOT NULL,
     pais TEXT NOT NULL,
@@ -31,22 +34,16 @@ CREATE TABLE emissores (
     
     -- Restrições
     UNIQUE (user_id, documento),
-    CONSTRAINT documento_valido CHECK (documento ~ '^[0-9]{11,14}$')
+    CONSTRAINT documento_valido CHECK (documento ~ '^.+$')  -- Aceita qualquer string não vazia
 );
 
-COMMENT ON TABLE emissores IS 'Armazena informações dos emissores de faturas, vinculados a usuários do sistema';
-COMMENT ON COLUMN emissores.user_id IS 'Vinculação com a tabela de usuários do Supabase Auth';
-COMMENT ON COLUMN emissores.documento IS 'CPF ou CNPJ do emissor (somente números)';
-
--- =============================================
 -- Tabela de Destinatários (Clientes)
--- =============================================
 CREATE TABLE destinatarios (
     -- Identificação
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     
-    -- Dados do destinatário (conforme interface)
+    -- Dados do destinatário
     nome_completo TEXT NOT NULL,
     documento TEXT,
     pais TEXT,
@@ -62,12 +59,7 @@ CREATE TABLE destinatarios (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-COMMENT ON TABLE destinatarios IS 'Armazena informações dos clientes/destinatários das faturas';
-COMMENT ON COLUMN destinatarios.documento IS 'CPF ou CNPJ do destinatário (opcional, somente números)';
-
--- =============================================
 -- Tabela de Faturas (Cabeçalho)
--- =============================================
 CREATE TABLE faturas (
     -- Identificação
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -77,7 +69,7 @@ CREATE TABLE faturas (
     emitente_id UUID NOT NULL REFERENCES emissores(id) ON DELETE RESTRICT,
     destinatario_id UUID NOT NULL REFERENCES destinatarios(id) ON DELETE RESTRICT,
     
-    -- Dados principais (conforme interface FormData)
+    -- Dados principais
     numero TEXT NOT NULL,
     data_fatura DATE NOT NULL DEFAULT CURRENT_DATE,
     data_vencimento DATE NOT NULL,
@@ -98,18 +90,13 @@ CREATE TABLE faturas (
     CONSTRAINT moeda_valida CHECK (moeda ~ '^[A-Z]{3}$')
 );
 
-COMMENT ON TABLE faturas IS 'Armazena o cabeçalho das faturas com dados do formulário';
-COMMENT ON COLUMN faturas.moeda IS 'Código de 3 letras da moeda (ex: BRL, USD)';
-
--- =============================================
 -- Tabela de Itens da Fatura
--- =============================================
 CREATE TABLE itens_fatura (
     -- Identificação
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     fatura_id UUID NOT NULL REFERENCES faturas(id) ON DELETE CASCADE,
     
-    -- Dados do item (conforme interface Item)
+    -- Dados do item
     id_original INTEGER NOT NULL,  -- Mantém o ID original do frontend
     quantidade NUMERIC(10, 3) NOT NULL,
     descricao TEXT NOT NULL,
@@ -126,18 +113,13 @@ CREATE TABLE itens_fatura (
     CONSTRAINT preco_positivo CHECK (preco_unitario >= 0)
 );
 
-COMMENT ON TABLE itens_fatura IS 'Armazena os itens individuais de cada fatura';
-COMMENT ON COLUMN itens_fatura.id_original IS 'ID original do frontend para sincronização';
-
--- =============================================
 -- Tabela de Taxas por Item
--- =============================================
 CREATE TABLE taxas_itens (
     -- Identificação
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     item_id UUID NOT NULL REFERENCES itens_fatura(id) ON DELETE CASCADE,
     
-    -- Dados da taxa (conforme interface TaxaItem)
+    -- Dados da taxa
     nome TEXT NOT NULL,
     valor NUMERIC(12, 2) NOT NULL,
     tipo TEXT NOT NULL CHECK (tipo IN ('percent', 'fixed')),
@@ -150,16 +132,12 @@ CREATE TABLE taxas_itens (
     CONSTRAINT valor_positivo CHECK (valor >= 0)
 );
 
-COMMENT ON TABLE taxas_itens IS 'Armazena as taxas aplicadas a cada item da fatura';
-
--- =============================================
 -- Tabela de Totais da Fatura
--- =============================================
 CREATE TABLE totais_fatura (
     -- Identificação
     fatura_id UUID PRIMARY KEY REFERENCES faturas(id) ON DELETE CASCADE,
     
-    -- Valores calculados (conforme interface Totais)
+    -- Valores calculados
     subtotal NUMERIC(12, 2) NOT NULL,
     total_taxas NUMERIC(12, 2) NOT NULL,
     total_final NUMERIC(12, 2) NOT NULL,
@@ -168,17 +146,13 @@ CREATE TABLE totais_fatura (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-COMMENT ON TABLE totais_fatura IS 'Armazena os totais calculados da fatura';
-
--- =============================================
 -- Tabela de Taxas Detalhadas (Agrupadas)
--- =============================================
 CREATE TABLE taxas_detalhadas (
     -- Identificação
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     fatura_id UUID NOT NULL REFERENCES faturas(id) ON DELETE CASCADE,
     
-    -- Dados da taxa (conforme interface TaxaDetalhada)
+    -- Dados da taxa
     nome TEXT NOT NULL,
     valor NUMERIC(12, 2) NOT NULL,
     
@@ -186,11 +160,10 @@ CREATE TABLE taxas_detalhadas (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-COMMENT ON TABLE taxas_detalhadas IS 'Armazena o detalhamento das taxas aplicadas na fatura';
+-- =============================================
+-- Seção 2: Índices para Melhor Performance
+-- =============================================
 
--- =============================================
--- Índices para Melhor Performance
--- =============================================
 CREATE INDEX idx_emissores_usuario ON emissores(user_id);
 CREATE INDEX idx_destinatarios_usuario ON destinatarios(user_id);
 CREATE INDEX idx_faturas_usuario ON faturas(user_id);
@@ -201,8 +174,9 @@ CREATE INDEX idx_taxas_itens ON taxas_itens(item_id);
 CREATE INDEX idx_taxas_detalhadas ON taxas_detalhadas(fatura_id);
 
 -- =============================================
--- Funções e Triggers Úteis
+-- Seção 3: Funções e Triggers Úteis
 -- =============================================
+
 -- Função para atualizar timestamps
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$
@@ -277,8 +251,9 @@ AFTER INSERT OR UPDATE OR DELETE ON taxas_itens
 FOR EACH ROW EXECUTE FUNCTION sync_totais_fatura();
 
 -- =============================================
--- Políticas de Segurança (RLS)
+-- Seção 4: Políticas de Segurança (RLS)
 -- =============================================
+
 -- Habilita RLS em todas as tabelas
 ALTER TABLE emissores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE destinatarios ENABLE ROW LEVEL SECURITY;
@@ -314,7 +289,7 @@ USING (
     )
 );
 
--- Políticas para Taxas (padrão similar para outras tabelas relacionadas)
+-- Políticas para Taxas
 CREATE POLICY "Acesso às taxas via itens do usuário"
 ON taxas_itens FOR ALL 
 USING (
@@ -327,8 +302,9 @@ USING (
 );
 
 -- =============================================
--- Função para Criar Fatura Completa (JSON)
+-- Seção 5: Função para Criar Fatura Completa
 -- =============================================
+
 CREATE OR REPLACE FUNCTION criar_fatura_completa(
     p_emitente JSONB,
     p_destinatario JSONB,
@@ -436,12 +412,25 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- =============================================
+-- Seção 6: Comentários para Documentação
+-- =============================================
+
+COMMENT ON TABLE emissores IS 'Armazena informações dos emissores de faturas, vinculados a usuários do sistema';
+COMMENT ON COLUMN emissores.user_id IS 'Vinculação com a tabela de usuários do Supabase Auth';
+COMMENT ON COLUMN emissores.documento IS 'CPF ou CNPJ do emissor';
+
+COMMENT ON TABLE destinatarios IS 'Armazena informações dos clientes/destinatários das faturas';
+COMMENT ON COLUMN destinatarios.documento IS 'CPF ou CNPJ do destinatário (opcional)';
+
+COMMENT ON TABLE faturas IS 'Armazena o cabeçalho das faturas com dados do formulário';
+COMMENT ON COLUMN faturas.moeda IS 'Código de 3 letras da moeda (ex: BRL, USD)';
+
+COMMENT ON TABLE itens_fatura IS 'Armazena os itens individuais de cada fatura';
+COMMENT ON COLUMN itens_fatura.id_original IS 'ID original do frontend para sincronização';
+
+COMMENT ON TABLE taxas_itens IS 'Armazena as taxas aplicadas a cada item da fatura';
+COMMENT ON TABLE totais_fatura IS 'Armazena os totais calculados da fatura';
+COMMENT ON TABLE taxas_detalhadas IS 'Armazena o detalhamento das taxas aplicadas na fatura';
+
 COMMENT ON FUNCTION criar_fatura_completa IS 'Função para criar uma fatura completa com todos os relacionamentos em uma única transação';
-
-ALTER TABLE emissores 
-DROP CONSTRAINT IF EXISTS documento_valido;
-
--- Nova constraint que aceita qualquer texto (mas não vazio)
-ALTER TABLE emissores
-ADD CONSTRAINT documento_valido 
-CHECK (documento ~ '^.+$');  -- Aceita qualquer string com pelo menos 1 caractere
