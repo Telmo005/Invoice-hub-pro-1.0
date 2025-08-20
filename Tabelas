@@ -360,7 +360,7 @@ BEGIN
         user_id, emitente_id, destinatario_id,
         numero, data_fatura, data_vencimento,
         ordem_compra, termos, moeda,
-        logo_url, assinatura_base64
+        logo_url, assinatura_base64, metodoPagamento
     ) VALUES (
         auth.uid(), v_emitente_id, v_destinatario_id,
         p_fatura->>'faturaNumero',
@@ -370,7 +370,8 @@ BEGIN
         p_fatura->>'termos',
         p_fatura->>'moeda',
         p_fatura->>'logo',
-        p_fatura->>'assinatura'
+        p_fatura->>'assinatura',
+        p_fatura->>'metodoPagamento'
     )
     RETURNING id INTO v_fatura_id;
 
@@ -428,6 +429,11 @@ COMMENT ON COLUMN faturas.moeda IS 'Código de 3 letras da moeda (ex: BRL, USD)'
 
 COMMENT ON TABLE itens_fatura IS 'Armazena os itens individuais de cada fatura';
 COMMENT ON COLUMN itens_fatura.id_original IS 'ID original do frontend para sincronização';
+
+ALTER TABLE faturas
+ADD COLUMN metodoPagamento TEXT;
+
+
 
 COMMENT ON TABLE taxas_itens IS 'Armazena as taxas aplicadas a cada item da fatura';
 COMMENT ON TABLE totais_fatura IS 'Armazena os totais calculados da fatura';
